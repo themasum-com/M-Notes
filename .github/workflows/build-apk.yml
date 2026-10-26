@@ -25,13 +25,13 @@ jobs:
           java-version: '17'
 
       - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       - name: Install dependencies
         run: npm ci
 
       - name: Prebuild native Android project
-        run: npx expo prebuild --platform android --clean
+        run: npx expo prebuild --platform android --clean --no-install
 
       - name: Build Installable Debug APK
         working-directory: android
@@ -44,3 +44,4 @@ jobs:
         with:
           name: M-Notes-Installable-APK
           path: android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
