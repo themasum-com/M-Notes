@@ -28,8 +28,8 @@
   },
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "test": "tsx --import ./test-setup.cjs --test src/tests/security_and_storage.test.ts",
     "lint": "expo lint"

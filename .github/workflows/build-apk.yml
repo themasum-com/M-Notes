@@ -1,9 +1,14 @@
-name: Build Android APK
+name: Build and Release Android APK
 
 on:
   workflow_dispatch:
   push:
     branches: [ main, master ]
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -36,6 +41,9 @@ jobs:
       - name: Run TypeScript typecheck
         run: npx tsc --noEmit
 
+      - name: Run ESLint
+        run: npm run lint
+
       - name: Prebuild native Android project
         run: npx expo prebuild --platform android --clean --no-install
 
@@ -48,9 +56,42 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease --no-daemon
 
-      - name: Upload Standalone Release APK
+      - name: Prepare APK Assets
+        run: |
+          mkdir -p release-assets
+          APK_FILE=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          if [ -z "$APK_FILE" ]; then
+            echo "::error::No release APK found!"
+            exit 1
+          fi
+          echo "Found release APK: $APK_FILE"
+
+          # Clean universal filename for direct download
+          cp "$APK_FILE" release-assets/M-Notes.apk
+
+          # Versioned filename when triggered by a Git tag
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            TAG_NAME="${GITHUB_REF#refs/tags/}"
+            cp "$APK_FILE" "release-assets/M-Notes-${TAG_NAME}.apk"
+          fi
+
+          ls -lh release-assets/
+
+      - name: Upload Standalone Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: M-Notes-Release-APK
-          path: android/app/build/outputs/apk/release/*.apk
+          path: release-assets/*.apk
           if-no-files-found: error
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: M Notes ${{ github.ref_name }}
+          files: release-assets/*.apk
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
