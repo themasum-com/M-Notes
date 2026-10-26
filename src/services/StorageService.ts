@@ -11,9 +11,9 @@ export const DEFAULT_FOLDERS: Folder[] = [
   { id: 'ideas', name: 'Ideas', icon: 'bulb-outline', createdAt: 4 },
 ];
 
-export function sanitizeFilename(name: string): string {
+export function sanitizeFilename(name: string = ''): string {
   // Strip characters illegal in filesystem paths on Android/Linux/Windows, preserving international unicode characters
-  const sanitized = name.replace(/[\\/:*?"<>|\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim();
+  const sanitized = (name || '').replace(/[\\/:*?"<>|\r\n\t]/g, ' ').replace(/\s+/g, ' ').trim();
   const truncated = sanitized.substring(0, 60).trim();
   return truncated.length > 0 ? truncated : 'Untitled_Note';
 }

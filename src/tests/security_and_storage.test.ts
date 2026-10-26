@@ -252,6 +252,11 @@ test('Export Formatting Suite', async (t: any) => {
 
     const emptyFallback = sanitizeFilename('   /// ??? ***   ');
     assert.equal(emptyFallback, 'Untitled_Note');
+
+    // Edge cases: null, undefined, empty string
+    assert.equal(sanitizeFilename(''), 'Untitled_Note');
+    assert.equal(sanitizeFilename(undefined as any), 'Untitled_Note');
+    assert.equal(sanitizeFilename(null as any), 'Untitled_Note');
   });
 
   await t.test('Formats Markdown (.md) export cleanly', () => {
@@ -268,4 +273,20 @@ test('Export Formatting Suite', async (t: any) => {
     assert.ok(txt.includes('──────────'));
     assert.ok(txt.includes('1. Reduce cloud costs'));
   });
+
+  await t.test('Handles empty and untitled notes in exports gracefully', () => {
+    const emptyNote: Note = {
+      id: 'empty_note',
+      title: '',
+      content: '',
+      folderId: 'general',
+      createdAt: 1700000000000,
+      updatedAt: 1700000000000,
+    };
+    const md = formatExportContent(emptyNote, 'General', 'md');
+    assert.ok(md.startsWith('# Untitled'));
+    const txt = formatExportContent(emptyNote, 'General', 'txt');
+    assert.ok(txt.startsWith('Untitled'));
+  });
 });
+

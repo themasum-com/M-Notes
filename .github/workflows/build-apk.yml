@@ -2,6 +2,17 @@ name: Build and Release Android APK
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: 'Publish as GitHub Release'
+        required: false
+        type: boolean
+        default: true
+      tag_name:
+        description: 'Release tag name (e.g. v1.0.1). Defaults to package.json version if empty.'
+        required: false
+        type: string
+        default: ''
   push:
     branches: [ main, master ]
     tags:
@@ -57,6 +68,7 @@ jobs:
           ./gradlew assembleRelease --no-daemon
 
       - name: Prepare APK Assets
+        id: prepare_assets
         run: |
           mkdir -p release-assets
           APK_FILE=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
@@ -66,32 +78,59 @@ jobs:
           fi
           echo "Found release APK: $APK_FILE"
 
+          PKG_VERSION="v$(node -p "require('./package.json').version")"
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            RELEASE_TAG="${GITHUB_REF#refs/tags/}"
+          elif [ -n "${{ inputs.tag_name }}" ]; then
+            RELEASE_TAG="${{ inputs.tag_name }}"
+          else
+            RELEASE_TAG="$PKG_VERSION"
+          fi
+
+          if [[ "$RELEASE_TAG" != v* ]]; then
+            RELEASE_TAG="v$RELEASE_TAG"
+          fi
+
+          echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
+          echo "tag=$RELEASE_TAG" >> $GITHUB_OUTPUT
+
           # Clean universal filename for direct download
           cp "$APK_FILE" release-assets/M-Notes.apk
 
-          # Versioned filename when triggered by a Git tag
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            TAG_NAME="${GITHUB_REF#refs/tags/}"
-            cp "$APK_FILE" "release-assets/M-Notes-${TAG_NAME}.apk"
-          fi
+          # Versioned filename for archive and releases
+          cp "$APK_FILE" "release-assets/M-Notes-${RELEASE_TAG}.apk"
 
+          # Generate sha256 checksums
+          (cd release-assets && sha256sum *.apk > SHA256SUMS.txt)
+
+          echo "Prepared release assets:"
           ls -lh release-assets/
+          cat release-assets/SHA256SUMS.txt
 
       - name: Upload Standalone Release APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: M-Notes-Release-APK
-          path: release-assets/*.apk
+          path: release-assets/*
           if-no-files-found: error
 
       - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: >
+          startsWith(github.ref, 'refs/tags/') ||
+          (github.event_name == 'workflow_dispatch' && (inputs.publish_release == true || inputs.publish_release == 'true'))
         uses: softprops/action-gh-release@v2
         with:
-          name: M Notes ${{ github.ref_name }}
-          files: release-assets/*.apk
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: M Notes ${{ env.RELEASE_TAG }}
+          files: release-assets/*
           generate_release_notes: true
           draft: false
           prerelease: false
+          body: |
+            ### 📱 M Notes ${{ env.RELEASE_TAG }}
+            - **Direct APK Download**: Tap [`M-Notes.apk`](https://github.com/themasum-com/M-Notes/releases/download/${{ env.RELEASE_TAG }}/M-Notes.apk) (or [`M-Notes-${{ env.RELEASE_TAG }}.apk`](https://github.com/themasum-com/M-Notes/releases/download/${{ env.RELEASE_TAG }}/M-Notes-${{ env.RELEASE_TAG }}.apk)) below to download directly to your Android device.
+            - **Privacy & Security**: 100% offline (no internet permissions), local hardware-backed AES-256-GCM encryption, biometric lock screen.
+            - **Installation Tip**: If Android displays *"Install unknown apps"*, enable permission for your browser or file manager to complete installation.
+            - **Verification**: Check `SHA256SUMS.txt` to verify file integrity.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

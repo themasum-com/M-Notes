@@ -14,12 +14,12 @@
     <img src="https://img.shields.io/github/v/release/themasum-com/M-Notes?color=F59E0B&label=Latest%20Release&logo=github" alt="Latest Release" />
   </a>
   <a href="https://github.com/themasum-com/M-Notes/actions/workflows/build-apk.yml">
-    <img src="https://github.com/themasum-com/M-Notes/actions/workflows/build-apk.yml/badge.svg" alt="Build and Release" />
+    <img src="https://github.com/themasum-com/M-Notes/actions/workflows/build-apk.yml/badge.svg?branch=master" alt="Build and Release" />
   </a>
-  <a href="#security--architecture">
+  <a href="#security">
     <img src="https://img.shields.io/badge/Security-AES--256--GCM-10B981.svg" alt="AES-256-GCM Encryption" />
   </a>
-  <a href="#100-offline--zero-telemetry">
+  <a href="#privacy">
     <img src="https://img.shields.io/badge/Privacy-100%25_Offline-8B5CF6.svg" alt="100% Offline" />
   </a>
   <a href="LICENSE">
@@ -35,6 +35,7 @@
 
 ---
 
+<a id="privacy"></a>
 ## 🌟 Overview
 
 **M Notes** is a secure, offline-first personal notes application for Android designed with two core principles: **absolute privacy** and a **calm, distraction-free writing experience**. 
@@ -56,6 +57,7 @@ Get the latest standalone Android APK directly from GitHub Releases:
 | Release | File | Action |
 | :--- | :--- | :--- |
 | **Latest Release** | `M-Notes.apk` | [**Download Raw APK**](https://github.com/themasum-com/M-Notes/releases/latest/download/M-Notes.apk) |
+| **Checksums** | `SHA256SUMS.txt` | [**View File Hashes**](https://github.com/themasum-com/M-Notes/releases/latest/download/SHA256SUMS.txt) |
 | **All Releases** | Release changelogs & tags | [**View GitHub Releases**](https://github.com/themasum-com/M-Notes/releases) |
 
 > **Installation Note**: Because M Notes is distributed directly as an APK without Google Play Services, your Android device may prompt to *"Allow installation from unknown sources"*. Simply grant permission to your browser/file manager to proceed.
@@ -64,6 +66,7 @@ Get the latest standalone Android APK directly from GitHub Releases:
 
 ## ✨ Features
 
+<a id="security"></a>
 ### 🔒 Security & Privacy First
 - **Zero Internet Permissions**: `android.permission.INTERNET` is explicitly blocked in `app.json`. The application literally cannot communicate over the network.
 - **AES-256-GCM Cryptography**: Uses `@noble/ciphers` with 12-byte cryptographically secure random nonces (IVs) and GCM authentication tags. Any external tampering or disk corruption renders the file rejected immediately.
@@ -188,15 +191,17 @@ M Notes uses Continuous Native Generation (CNG) via Expo Prebuild:
 This repository includes a continuous integration and release pipeline configured in [`.github/workflows/build-apk.yml`](.github/workflows/build-apk.yml):
 
 - **Pull Requests & Branch Pushes**: Automatically executes `npm test`, `npx tsc --noEmit`, `npm run lint`, builds the standalone Release APK, and uploads it to GitHub Actions Workflow Artifacts.
-- **Tag Pushes (`v*`)**: Whenever a new tag is pushed (e.g. `v1.0.0`), GitHub Actions builds the production standalone APK and automatically publishes a official **GitHub Release**:
+- **Tag Pushes (`v*`)**: Whenever a new version tag is pushed (e.g. `v1.0.0`), GitHub Actions builds the production standalone APK and automatically publishes an official **GitHub Release**:
   - Direct download file: `M-Notes.apk`
   - Versioned release file: `M-Notes-v1.0.0.apk`
-  - Release changelog generated from git commits
+  - Integrity checksums: `SHA256SUMS.txt`
+  - Automated release notes and commit changelog
+- **Manual Workflow Dispatch**: Releases can also be triggered directly from the GitHub Actions web interface or GitHub CLI (`gh workflow run build-apk.yml`) with an optional custom tag parameter.
 
-To publish a new release:
+To publish a new release via Git tag:
 ```bash
-git tag v1.0.0
-git push origin master --tags
+git tag v1.0.1
+git push origin v1.0.1
 ```
 
 ---
