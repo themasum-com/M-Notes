@@ -1,25 +1,52 @@
 {
   "expo": {
-    "name": "m-notes",
+    "name": "M Notes",
     "slug": "m-notes",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.mnotes.secure",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "M Notes uses biometric authentication to protect your private notes."
+      }
     },
     "android": {
+      "package": "com.mnotes.secure",
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#FED766",
+        "foregroundImage": "./assets/android-icon-foreground.png"
       },
+      "permissions": [
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT"
+      ],
+      "blockedPermissions": [
+        "android.permission.INTERNET"
+      ],
       "predictiveBackGestureEnabled": false
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    }
+    "plugins": [
+      "expo-secure-store",
+      "expo-sharing",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow M Notes to use Face ID to securely unlock your notes."
+        }
+      ],
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#FED766"
+        }
+      ]
+    ]
   }
 }
