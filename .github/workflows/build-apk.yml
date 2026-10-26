@@ -41,8 +41,6 @@ jobs:
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
-        with:
-          build-root-directory: android
 
       - name: Build Installable Debug APK
         working-directory: android
@@ -56,4 +54,3 @@ jobs:
           name: M-Notes-Installable-APK
           path: android/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
-
