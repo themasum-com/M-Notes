@@ -18,14 +18,24 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({ size = 'md', style }) => {
   const borderRadius = Math.round(dimension * 0.22);
 
   return (
-    <View style={[styles.container, { width: dimension, height: dimension }, style]}>
+    <View
+      style={[
+        styles.container,
+        {
+          width: dimension,
+          height: dimension,
+          borderRadius,
+        },
+        style,
+      ]}
+    >
       <Image
         source={require('../../assets/logo.png')}
         style={[
           styles.image,
           {
-            width: dimension,
-            height: dimension,
+            width: '100%',
+            height: '100%',
             borderRadius,
           },
         ]}

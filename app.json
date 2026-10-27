@@ -16,6 +16,7 @@
     "android": {
       "package": "com.mnotes.secure",
       "versionCode": 2,
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#FED766",
         "foregroundImage": "./assets/android-icon-foreground.png"

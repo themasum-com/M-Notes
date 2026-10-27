@@ -406,7 +406,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 4 : 0,
   },
   header: {
     flexDirection: 'row',

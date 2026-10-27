@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   View,
   TouchableWithoutFeedback,
-  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { AppTheme } from '../constants/theme';
@@ -32,23 +31,6 @@ export const EditorMenuModal: React.FC<EditorMenuModalProps> = ({
   onDelete,
   onClose,
 }) => {
-  const confirmDelete = () => {
-    Alert.alert(
-      'Delete Note',
-      `Are you sure you want to permanently delete "${noteTitle || 'Untitled Note'}"? This cannot be undone.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            onClose();
-            onDelete();
-          },
-        },
-      ]
-    );
-  };
 
   return (
     <Modal
@@ -159,7 +141,10 @@ export const EditorMenuModal: React.FC<EditorMenuModalProps> = ({
                 {/* Delete Note */}
                 <TouchableOpacity
                   style={styles.actionItem}
-                  onPress={confirmDelete}
+                  onPress={() => {
+                    onClose();
+                    onDelete();
+                  }}
                   activeOpacity={0.7}
                   accessibilityLabel="Delete note"
                 >

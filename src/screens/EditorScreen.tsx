@@ -55,11 +55,16 @@ export const EditorScreen: React.FC<EditorScreenProps> = ({
 
   // Keyboard and Scroll Tracking State
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isWindowResized, setIsWindowResized] = useState(false);
   const keyboardHeightRef = useRef(0);
   const activeFieldRef = useRef<'title' | 'content'>('content');
   const selectionRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
   const scrollYRef = useRef(0);
+  const layoutWidthRef = useRef(360);
   const layoutHeightRef = useRef(0);
+  const initialHeightRef = useRef(0);
+  const titleHeightRef = useRef(48);
+  const bodyHeightRef = useRef(250);
   const scrollViewRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
 
   const currentNoteIdRef = useRef<string>(noteId || '');
@@ -76,52 +81,73 @@ export const EditorScreen: React.FC<EditorScreenProps> = ({
   useEffect(() => { folderIdRef.current = folderId; }, [folderId]);
   useEffect(() => { createdAtRef.current = createdAt; }, [createdAt]);
 
-  const getCursorY = useCallback(() => {
+  const calculateCursorY = useCallback(() => {
     const CONTENT_PADDING_TOP = 18;
-    const titleLines = Math.max(1, (titleRef.current || '').split('\n').length);
-    const titleBlockHeight = titleLines * 32 + 16;
+    const titleHeight = titleHeightRef.current || 48;
+    const TITLE_MARGIN_BOTTOM = 16;
+    const BODY_TOP = CONTENT_PADDING_TOP + titleHeight + TITLE_MARGIN_BOTTOM;
 
     if (activeFieldRef.current === 'title') {
       const textBefore = (titleRef.current || '').slice(0, selectionRef.current.start);
-      const lineIndex = textBefore.split('\n').length - 1;
-      return CONTENT_PADDING_TOP + lineIndex * 32;
+      const titleLinesBefore = textBefore.split('\n').length - 1;
+      const totalTitleLines = Math.max(1, (titleRef.current || '').split('\n').length);
+      const lineHeight = titleHeight / totalTitleLines;
+      return CONTENT_PADDING_TOP + titleLinesBefore * lineHeight;
     }
 
-    const textBefore = (contentRef.current || '').slice(0, selectionRef.current.start);
+    const text = contentRef.current || '';
+    const cursorIndex = Math.min(selectionRef.current.start, text.length);
+    if (cursorIndex === 0) {
+      return BODY_TOP;
+    }
+
+    const textBefore = text.slice(0, cursorIndex);
     const paragraphs = textBefore.split('\n');
-    let visualLineCount = 0;
-    const CHARS_PER_LINE = 38;
+    const containerWidth = layoutWidthRef.current || 360;
+    const textWidth = Math.max(200, containerWidth - 40);
+    const charsPerLine = Math.max(15, Math.floor(textWidth / 8.2));
+
+    let visualLines = 0;
     for (let i = 0; i < paragraphs.length; i++) {
       const p = paragraphs[i];
       if (i < paragraphs.length - 1) {
-        visualLineCount += Math.max(1, Math.ceil(p.length / CHARS_PER_LINE));
+        visualLines += Math.max(1, Math.ceil(p.length / charsPerLine));
       } else {
-        visualLineCount += Math.floor(p.length / CHARS_PER_LINE);
+        visualLines += Math.floor(p.length / charsPerLine);
       }
     }
-    return CONTENT_PADDING_TOP + titleBlockHeight + visualLineCount * 24;
+
+    const bodyHeight = bodyHeightRef.current || 250;
+    const estimatedY = BODY_TOP + visualLines * 24;
+    return Math.min(estimatedY, BODY_TOP + bodyHeight);
   }, []);
 
   const scrollToActiveCursor = useCallback(
-    (currentKbHeight?: number) => {
-      const kbHeight = currentKbHeight ?? keyboardHeightRef.current;
+    (animated: boolean = true) => {
+      const kbHeight = keyboardHeightRef.current;
+      if (kbHeight <= 0) return;
+
       const scrollY = scrollYRef.current;
-      const viewHeight = layoutHeightRef.current || 500;
-      const cursorY = getCursorY();
+      const layoutHeight = layoutHeightRef.current || 500;
+      const initialHeight = initialHeightRef.current || layoutHeight;
 
-      if (kbHeight > 0) {
-        // Visible height in ScrollView above keyboard and footer bar
-        const visibleHeight = Math.max(140, viewHeight - kbHeight - 44);
-        const topThreshold = scrollY + 20;
-        const bottomThreshold = scrollY + visibleHeight - 36;
+      // If the layout height already shrank when keyboard showed, don't subtract keyboard height again!
+      const isResized = initialHeight > 0 && layoutHeight < initialHeight - 50;
+      const visibleHeight = isResized ? layoutHeight : Math.max(140, layoutHeight - kbHeight);
 
-        if (cursorY > bottomThreshold || cursorY < topThreshold) {
-          const targetY = Math.max(0, cursorY - visibleHeight / 2);
-          scrollViewRef.current?.scrollTo({ y: targetY, animated: true });
-        }
+      const cursorY = calculateCursorY();
+      const topThreshold = scrollY + 15;
+      const bottomThreshold = scrollY + visibleHeight - 55;
+
+      if (cursorY > bottomThreshold) {
+        const targetY = Math.max(0, cursorY - (visibleHeight - 90));
+        scrollViewRef.current?.scrollTo({ y: targetY, animated });
+      } else if (cursorY < topThreshold) {
+        const targetY = Math.max(0, cursorY - 30);
+        scrollViewRef.current?.scrollTo({ y: targetY, animated });
       }
     },
-    [getCursorY]
+    [calculateCursorY]
   );
 
   // Keyboard Event Listeners
@@ -134,13 +160,14 @@ export const EditorScreen: React.FC<EditorScreenProps> = ({
       setKeyboardHeight(height);
       keyboardHeightRef.current = height;
       setTimeout(() => {
-        scrollToActiveCursor(height);
-      }, 50);
+        scrollToActiveCursor(true);
+      }, 80);
     });
 
     const hideSub = Keyboard.addListener(hideEvent, () => {
       setKeyboardHeight(0);
       keyboardHeightRef.current = 0;
+      setIsWindowResized(false);
     });
 
     return () => {
@@ -243,17 +270,11 @@ export const EditorScreen: React.FC<EditorScreenProps> = ({
   const handleTitleChange = (newTitle: string) => {
     setTitle(newTitle);
     triggerAutoSave(newTitle, content);
-    if (keyboardHeightRef.current > 0) {
-      scrollToActiveCursor();
-    }
   };
 
   const handleContentChange = (newContent: string) => {
     setContent(newContent);
     triggerAutoSave(title, newContent);
-    if (keyboardHeightRef.current > 0) {
-      scrollToActiveCursor();
-    }
   };
 
   const handleBackPress = useCallback(async () => {
@@ -299,7 +320,7 @@ export const EditorScreen: React.FC<EditorScreenProps> = ({
   const handleDeletePress = () => {
     Alert.alert(
       'Delete Note',
-      'Are you sure you want to permanently delete this note?',
+      `Are you sure you want to permanently delete "${title.trim() || 'Untitled Note'}"? This cannot be undone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -422,7 +443,14 @@ export const EditorScreen: React.FC<EditorScreenProps> = ({
           style={styles.scrollArea}
           contentContainerStyle={[
             styles.scrollContent,
-            { paddingBottom: Math.max(60, keyboardHeight + 40) },
+            {
+              paddingBottom:
+                keyboardHeight > 0
+                  ? isWindowResized
+                    ? 120
+                    : keyboardHeight + 40
+                  : 60,
+            },
           ]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="interactive"
@@ -430,7 +458,17 @@ export const EditorScreen: React.FC<EditorScreenProps> = ({
             scrollYRef.current = e.nativeEvent.contentOffset.y;
           }}
           onLayout={(e) => {
-            layoutHeightRef.current = e.nativeEvent.layout.height;
+            const { width, height } = e.nativeEvent.layout;
+            layoutWidthRef.current = width;
+            layoutHeightRef.current = height;
+            if (keyboardHeightRef.current === 0 && height > initialHeightRef.current) {
+              initialHeightRef.current = height;
+            }
+            if (initialHeightRef.current > 0 && height < initialHeightRef.current - 50) {
+              setIsWindowResized(true);
+            } else if (keyboardHeightRef.current === 0) {
+              setIsWindowResized(false);
+            }
           }}
           scrollEventThrottle={16}
         >
@@ -443,12 +481,14 @@ export const EditorScreen: React.FC<EditorScreenProps> = ({
             onChangeText={handleTitleChange}
             onFocus={() => {
               activeFieldRef.current = 'title';
-              setTimeout(() => scrollToActiveCursor(), 60);
+            }}
+            onContentSizeChange={(e) => {
+              titleHeightRef.current = e.nativeEvent.contentSize.height;
             }}
             onSelectionChange={(e) => {
               selectionRef.current = e.nativeEvent.selection;
               if (keyboardHeightRef.current > 0) {
-                scrollToActiveCursor();
+                scrollToActiveCursor(true);
               }
             }}
             multiline
@@ -464,12 +504,17 @@ export const EditorScreen: React.FC<EditorScreenProps> = ({
             onChangeText={handleContentChange}
             onFocus={() => {
               activeFieldRef.current = 'content';
-              setTimeout(() => scrollToActiveCursor(), 60);
+            }}
+            onContentSizeChange={(e) => {
+              bodyHeightRef.current = e.nativeEvent.contentSize.height;
+              if (keyboardHeightRef.current > 0) {
+                scrollToActiveCursor(false);
+              }
             }}
             onSelectionChange={(e) => {
               selectionRef.current = e.nativeEvent.selection;
               if (keyboardHeightRef.current > 0) {
-                scrollToActiveCursor();
+                scrollToActiveCursor(true);
               }
             }}
             multiline
@@ -528,7 +573,7 @@ export const EditorScreen: React.FC<EditorScreenProps> = ({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 4 : 0,
   },
   loadingContainer: {
     flex: 1,

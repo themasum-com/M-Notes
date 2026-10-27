@@ -130,7 +130,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ theme, onUnlock }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) + 4 : 0,
   },
   content: {
     flex: 1,

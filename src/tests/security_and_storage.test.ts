@@ -298,40 +298,56 @@ test('App Version & UI Enhancements Suite', async (t: any) => {
 
     assert.equal(appJson.expo.version, '1.0.1');
     assert.equal(appJson.expo.android.versionCode, 2);
+    assert.equal(appJson.expo.android.softwareKeyboardLayoutMode, 'resize');
     assert.equal(pkgJson.version, '1.0.1');
     assert.equal(appJson.expo.android.adaptiveIcon.backgroundColor, '#FED766');
   });
 
-  await t.test('Auto-scroll cursor Y position calculation handles edge cases correctly', () => {
+  await t.test('Responsive auto-scroll cursor Y position calculation handles various screen widths and edge cases', () => {
     const calculateCursorY = (
       title: string,
       content: string,
       activeField: 'title' | 'content',
-      cursorIndex: number
+      cursorIndex: number,
+      containerWidth: number = 360,
+      titleHeight: number = 48,
+      bodyHeight: number = 250
     ) => {
       const CONTENT_PADDING_TOP = 18;
-      const titleLines = Math.max(1, (title || '').split('\n').length);
-      const titleBlockHeight = titleLines * 32 + 16;
+      const TITLE_MARGIN_BOTTOM = 16;
+      const BODY_TOP = CONTENT_PADDING_TOP + titleHeight + TITLE_MARGIN_BOTTOM;
 
       if (activeField === 'title') {
         const textBefore = (title || '').slice(0, cursorIndex);
-        const lineIndex = textBefore.split('\n').length - 1;
-        return CONTENT_PADDING_TOP + lineIndex * 32;
+        const titleLinesBefore = textBefore.split('\n').length - 1;
+        const totalTitleLines = Math.max(1, (title || '').split('\n').length);
+        const lineHeight = titleHeight / totalTitleLines;
+        return CONTENT_PADDING_TOP + titleLinesBefore * lineHeight;
       }
 
-      const textBefore = (content || '').slice(0, cursorIndex);
+      const text = content || '';
+      const safeCursor = Math.min(cursorIndex, text.length);
+      if (safeCursor === 0) {
+        return BODY_TOP;
+      }
+
+      const textBefore = text.slice(0, safeCursor);
       const paragraphs = textBefore.split('\n');
-      let visualLineCount = 0;
-      const CHARS_PER_LINE = 38;
+      const textWidth = Math.max(200, containerWidth - 40);
+      const charsPerLine = Math.max(15, Math.floor(textWidth / 8.2));
+
+      let visualLines = 0;
       for (let i = 0; i < paragraphs.length; i++) {
         const p = paragraphs[i];
         if (i < paragraphs.length - 1) {
-          visualLineCount += Math.max(1, Math.ceil(p.length / CHARS_PER_LINE));
+          visualLines += Math.max(1, Math.ceil(p.length / charsPerLine));
         } else {
-          visualLineCount += Math.floor(p.length / CHARS_PER_LINE);
+          visualLines += Math.floor(p.length / charsPerLine);
         }
       }
-      return CONTENT_PADDING_TOP + titleBlockHeight + visualLineCount * 24;
+
+      const estimatedY = BODY_TOP + visualLines * 24;
+      return Math.min(estimatedY, BODY_TOP + bodyHeight);
     };
 
     // Edge case 1: Title cursor at line 0
@@ -340,13 +356,20 @@ test('App Version & UI Enhancements Suite', async (t: any) => {
 
     // Edge case 2: Empty note content cursor
     const y2 = calculateCursorY('', '', 'content', 0);
-    assert.equal(y2, 18 + 48); // 18 padding + 48 title block
+    assert.equal(y2, 18 + 48 + 16); // 18 padding + 48 title + 16 margin = 82
 
-    // Edge case 3: 50 lines down in content
+    // Edge case 3: 50 lines down in content on mobile phone (360dp width)
     const multilineContent = Array(50).fill('Line item for notes').join('\n');
     const endCursor = multilineContent.length;
-    const y3 = calculateCursorY('My Note Title', multilineContent, 'content', endCursor);
-    assert.ok(y3 >= 18 + 48 + 49 * 24, 'Cursor 50 lines down must be positioned vertically correctly');
+    const y3 = calculateCursorY('My Note Title', multilineContent, 'content', endCursor, 360, 48, 1500);
+    assert.ok(y3 >= 82 + 49 * 24, 'Cursor 50 lines down must be positioned vertically correctly');
+
+    // Edge case 4: Tablet width (768dp) adapts charsPerLine and avoids overcounting visual lines
+    const longParagraph = 'A'.repeat(120);
+    const phoneY = calculateCursorY('Title', longParagraph, 'content', 120, 360, 48, 500);
+    const tabletY = calculateCursorY('Title', longParagraph, 'content', 120, 768, 48, 500);
+    // On tablet (wider), fewer visual lines are wrapped, so Y is lower or equal
+    assert.ok(tabletY <= phoneY, 'Wider tablet container should wrap into fewer or equal lines than phone');
   });
 });
 
