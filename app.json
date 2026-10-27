@@ -2,7 +2,7 @@
   "expo": {
     "name": "M Notes",
     "slug": "m-notes",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -15,6 +15,7 @@
     },
     "android": {
       "package": "com.mnotes.secure",
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#FED766",
         "foregroundImage": "./assets/android-icon-foreground.png"

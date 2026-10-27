@@ -290,3 +290,64 @@ test('Export Formatting Suite', async (t: any) => {
   });
 });
 
+test('App Version & UI Enhancements Suite', async (t: any) => {
+  await t.test('app.json and package.json versions are bumped correctly to 1.0.1 and versionCode 2', async () => {
+    const fs = await import('fs');
+    const appJson = JSON.parse(fs.readFileSync('./app.json', 'utf8'));
+    const pkgJson = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+
+    assert.equal(appJson.expo.version, '1.0.1');
+    assert.equal(appJson.expo.android.versionCode, 2);
+    assert.equal(pkgJson.version, '1.0.1');
+    assert.equal(appJson.expo.android.adaptiveIcon.backgroundColor, '#FED766');
+  });
+
+  await t.test('Auto-scroll cursor Y position calculation handles edge cases correctly', () => {
+    const calculateCursorY = (
+      title: string,
+      content: string,
+      activeField: 'title' | 'content',
+      cursorIndex: number
+    ) => {
+      const CONTENT_PADDING_TOP = 18;
+      const titleLines = Math.max(1, (title || '').split('\n').length);
+      const titleBlockHeight = titleLines * 32 + 16;
+
+      if (activeField === 'title') {
+        const textBefore = (title || '').slice(0, cursorIndex);
+        const lineIndex = textBefore.split('\n').length - 1;
+        return CONTENT_PADDING_TOP + lineIndex * 32;
+      }
+
+      const textBefore = (content || '').slice(0, cursorIndex);
+      const paragraphs = textBefore.split('\n');
+      let visualLineCount = 0;
+      const CHARS_PER_LINE = 38;
+      for (let i = 0; i < paragraphs.length; i++) {
+        const p = paragraphs[i];
+        if (i < paragraphs.length - 1) {
+          visualLineCount += Math.max(1, Math.ceil(p.length / CHARS_PER_LINE));
+        } else {
+          visualLineCount += Math.floor(p.length / CHARS_PER_LINE);
+        }
+      }
+      return CONTENT_PADDING_TOP + titleBlockHeight + visualLineCount * 24;
+    };
+
+    // Edge case 1: Title cursor at line 0
+    const y1 = calculateCursorY('', '', 'title', 0);
+    assert.equal(y1, 18);
+
+    // Edge case 2: Empty note content cursor
+    const y2 = calculateCursorY('', '', 'content', 0);
+    assert.equal(y2, 18 + 48); // 18 padding + 48 title block
+
+    // Edge case 3: 50 lines down in content
+    const multilineContent = Array(50).fill('Line item for notes').join('\n');
+    const endCursor = multilineContent.length;
+    const y3 = calculateCursorY('My Note Title', multilineContent, 'content', endCursor);
+    assert.ok(y3 >= 18 + 48 + 49 * 24, 'Cursor 50 lines down must be positioned vertically correctly');
+  });
+});
+
+

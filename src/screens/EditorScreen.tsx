@@ -8,11 +8,13 @@ import {
   SafeAreaView,
   ScrollView,
   KeyboardAvoidingView,
-  Platform,
-  Alert,
   ActivityIndicator,
   BackHandler,
   AppState,
+  Platform,
+  StatusBar,
+  Keyboard,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Note, Folder, ExportFormat } from '../types';
@@ -20,6 +22,7 @@ import { AppTheme } from '../constants/theme';
 import { storageService } from '../services/StorageService';
 import { MoveNoteModal } from '../components/MoveNoteModal';
 import { ExportModal } from '../components/ExportModal';
+import { EditorMenuModal } from '../components/EditorMenuModal';
 
 interface EditorScreenProps {
   noteId: string | null;
@@ -45,9 +48,19 @@ export const EditorScreen: React.FC<EditorScreenProps> = ({
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving'>('saved');
   const [folders, setFolders] = useState<Folder[]>([]);
 
-  // Modals
+  // Modals & Menu
   const [isMoveModalVisible, setIsMoveModalVisible] = useState(false);
   const [isExportModalVisible, setIsExportModalVisible] = useState(false);
+  const [isMenuVisible, setIsMenuVisible] = useState(false);
+
+  // Keyboard and Scroll Tracking State
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const keyboardHeightRef = useRef(0);
+  const activeFieldRef = useRef<'title' | 'content'>('content');
+  const selectionRef = useRef<{ start: number; end: number }>({ start: 0, end: 0 });
+  const scrollYRef = useRef(0);
+  const layoutHeightRef = useRef(0);
+  const scrollViewRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
 
   const currentNoteIdRef = useRef<string>(noteId || '');
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -62,6 +75,79 @@ export const EditorScreen: React.FC<EditorScreenProps> = ({
   useEffect(() => { contentRef.current = content; }, [content]);
   useEffect(() => { folderIdRef.current = folderId; }, [folderId]);
   useEffect(() => { createdAtRef.current = createdAt; }, [createdAt]);
+
+  const getCursorY = useCallback(() => {
+    const CONTENT_PADDING_TOP = 18;
+    const titleLines = Math.max(1, (titleRef.current || '').split('\n').length);
+    const titleBlockHeight = titleLines * 32 + 16;
+
+    if (activeFieldRef.current === 'title') {
+      const textBefore = (titleRef.current || '').slice(0, selectionRef.current.start);
+      const lineIndex = textBefore.split('\n').length - 1;
+      return CONTENT_PADDING_TOP + lineIndex * 32;
+    }
+
+    const textBefore = (contentRef.current || '').slice(0, selectionRef.current.start);
+    const paragraphs = textBefore.split('\n');
+    let visualLineCount = 0;
+    const CHARS_PER_LINE = 38;
+    for (let i = 0; i < paragraphs.length; i++) {
+      const p = paragraphs[i];
+      if (i < paragraphs.length - 1) {
+        visualLineCount += Math.max(1, Math.ceil(p.length / CHARS_PER_LINE));
+      } else {
+        visualLineCount += Math.floor(p.length / CHARS_PER_LINE);
+      }
+    }
+    return CONTENT_PADDING_TOP + titleBlockHeight + visualLineCount * 24;
+  }, []);
+
+  const scrollToActiveCursor = useCallback(
+    (currentKbHeight?: number) => {
+      const kbHeight = currentKbHeight ?? keyboardHeightRef.current;
+      const scrollY = scrollYRef.current;
+      const viewHeight = layoutHeightRef.current || 500;
+      const cursorY = getCursorY();
+
+      if (kbHeight > 0) {
+        // Visible height in ScrollView above keyboard and footer bar
+        const visibleHeight = Math.max(140, viewHeight - kbHeight - 44);
+        const topThreshold = scrollY + 20;
+        const bottomThreshold = scrollY + visibleHeight - 36;
+
+        if (cursorY > bottomThreshold || cursorY < topThreshold) {
+          const targetY = Math.max(0, cursorY - visibleHeight / 2);
+          scrollViewRef.current?.scrollTo({ y: targetY, animated: true });
+        }
+      }
+    },
+    [getCursorY]
+  );
+
+  // Keyboard Event Listeners
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, (e) => {
+      const height = e.endCoordinates.height;
+      setKeyboardHeight(height);
+      keyboardHeightRef.current = height;
+      setTimeout(() => {
+        scrollToActiveCursor(height);
+      }, 50);
+    });
+
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardHeight(0);
+      keyboardHeightRef.current = 0;
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [scrollToActiveCursor]);
 
   // Load existing note or initialize new
   useEffect(() => {
@@ -157,11 +243,17 @@ export const EditorScreen: React.FC<EditorScreenProps> = ({
   const handleTitleChange = (newTitle: string) => {
     setTitle(newTitle);
     triggerAutoSave(newTitle, content);
+    if (keyboardHeightRef.current > 0) {
+      scrollToActiveCursor();
+    }
   };
 
   const handleContentChange = (newContent: string) => {
     setContent(newContent);
     triggerAutoSave(title, newContent);
+    if (keyboardHeightRef.current > 0) {
+      scrollToActiveCursor();
+    }
   };
 
   const handleBackPress = useCallback(async () => {
@@ -299,7 +391,7 @@ export const EditorScreen: React.FC<EditorScreenProps> = ({
           />
         </TouchableOpacity>
 
-        {/* Right Actions: Save Status, Export, Delete */}
+        {/* Right Actions: Save Status Indicator & 3-Dot Menu */}
         <View style={styles.rightActions}>
           <View style={styles.statusIndicator}>
             {saveStatus === 'saving' ? (
@@ -311,18 +403,11 @@ export const EditorScreen: React.FC<EditorScreenProps> = ({
 
           <TouchableOpacity
             style={styles.iconBtn}
-            onPress={() => setIsExportModalVisible(true)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            onPress={() => setIsMenuVisible(true)}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel="Note options"
           >
-            <Ionicons name="share-outline" size={20} color={theme.colors.textPrimary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.iconBtn}
-            onPress={handleDeletePress}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons name="trash-outline" size={20} color={theme.colors.danger} />
+            <Ionicons name="ellipsis-vertical" size={20} color={theme.colors.textPrimary} />
           </TouchableOpacity>
         </View>
       </View>
@@ -333,9 +418,21 @@ export const EditorScreen: React.FC<EditorScreenProps> = ({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <ScrollView
+          ref={scrollViewRef}
           style={styles.scrollArea}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: Math.max(60, keyboardHeight + 40) },
+          ]}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="interactive"
+          onScroll={(e) => {
+            scrollYRef.current = e.nativeEvent.contentOffset.y;
+          }}
+          onLayout={(e) => {
+            layoutHeightRef.current = e.nativeEvent.layout.height;
+          }}
+          scrollEventThrottle={16}
         >
           {/* Note Title Input */}
           <TextInput
@@ -344,6 +441,16 @@ export const EditorScreen: React.FC<EditorScreenProps> = ({
             placeholderTextColor={theme.colors.textMuted}
             value={title}
             onChangeText={handleTitleChange}
+            onFocus={() => {
+              activeFieldRef.current = 'title';
+              setTimeout(() => scrollToActiveCursor(), 60);
+            }}
+            onSelectionChange={(e) => {
+              selectionRef.current = e.nativeEvent.selection;
+              if (keyboardHeightRef.current > 0) {
+                scrollToActiveCursor();
+              }
+            }}
             multiline
             scrollEnabled={false}
           />
@@ -355,6 +462,16 @@ export const EditorScreen: React.FC<EditorScreenProps> = ({
             placeholderTextColor={theme.colors.textMuted}
             value={content}
             onChangeText={handleContentChange}
+            onFocus={() => {
+              activeFieldRef.current = 'content';
+              setTimeout(() => scrollToActiveCursor(), 60);
+            }}
+            onSelectionChange={(e) => {
+              selectionRef.current = e.nativeEvent.selection;
+              if (keyboardHeightRef.current > 0) {
+                scrollToActiveCursor();
+              }
+            }}
             multiline
             scrollEnabled={false}
             textAlignVertical="top"
@@ -373,6 +490,18 @@ export const EditorScreen: React.FC<EditorScreenProps> = ({
           </Text>
         </View>
       </KeyboardAvoidingView>
+
+      {/* 3-Dot Vertical Options Menu Modal */}
+      <EditorMenuModal
+        visible={isMenuVisible}
+        theme={theme}
+        noteTitle={title || 'Untitled Note'}
+        currentFolderName={currentFolder.name}
+        onMoveToFolder={() => setIsMoveModalVisible(true)}
+        onExport={() => setIsExportModalVisible(true)}
+        onDelete={handleDeletePress}
+        onClose={() => setIsMenuVisible(false)}
+      />
 
       {/* Move Note Modal */}
       <MoveNoteModal
@@ -399,6 +528,7 @@ export const EditorScreen: React.FC<EditorScreenProps> = ({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0,
   },
   loadingContainer: {
     flex: 1,

@@ -10,6 +10,8 @@ import {
   SafeAreaView,
   Alert,
   BackHandler,
+  Platform,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { NoteMetadata, Folder, ExportFormat } from '../types';
@@ -404,6 +406,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0,
   },
   header: {
     flexDirection: 'row',

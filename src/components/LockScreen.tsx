@@ -6,6 +6,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   SafeAreaView,
+  Platform,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BrandLogo } from './BrandLogo';
@@ -128,6 +130,7 @@ export const LockScreen: React.FC<LockScreenProps> = ({ theme, onUnlock }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 24) : 0,
   },
   content: {
     flex: 1,

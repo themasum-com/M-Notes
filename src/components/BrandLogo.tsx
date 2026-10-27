@@ -39,6 +39,8 @@ const styles = StyleSheet.create({
   container: {
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#FED766',
+    overflow: 'hidden',
   },
   image: {
     overflow: 'hidden',
